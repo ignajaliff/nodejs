@@ -1,21 +1,42 @@
 const express = require('express');
+const puppeteer = require('puppeteer');
+const bodyParser = require('body-parser');
+const fs = require('fs');
 const path = require('path');
-const indexRouter = require('./routes/index');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Serve static files from the "public" directory
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(bodyParser.text({ type: 'text/html' }));
 
-// Use the router for handling routes
-app.use('/', indexRouter);
+app.post('/html-to-pdf', async (req, res) => {
+  const html = req.body;
 
-// Catch-all route for handling 404 errors
-app.use((req, res, next) => {
-    res.status(404).sendFile(path.join(__dirname, 'views', '404.html'));
-  });
+  try {
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({ format: 'A4' });
+
+    await browser.close();
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename=documento.pdf',
+    });
+
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error al generar el PDF:', error);
+    res.status(500).send('Error generando PDF');
+  }
+});
 
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}/`);
+  console.log(`Servidor escuchando en http://localhost:${PORT}`);
 });
